@@ -82,7 +82,7 @@ testing1 <- testing1[,nzv$nzv==FALSE]
 ```
 Exploring the file shown there are several columns with NA values, empty or useless for the prediction task (as the non-accelerometer measures). Removing all these columns, as well as those columns with a near zero variance, reduced the number of possible predictors to `r ncol(testing1)`.
 
-### Training
+## Decision Trees
 
 In order to train the model and to do a cross validation, the training set was divided in two partitions.
 
@@ -93,7 +93,7 @@ train = training1[partition,]
 valid = training1[-partition,]
 ```
 
-and a train model using random forests is formulated:
+and a train model using decsion trees is formulated:
 
 ```{r}
 model1 <- train(classe ~., method="rf", data=train, trControl=trainControl(method='cv'), number=5, allowParallel=TRUE )
@@ -101,7 +101,7 @@ decTrees <- rpart(classe ~ ., data=train, method="class")
 fancyRpartPlot(decTrees)
 ```
 
-### Accuracy
+### Accuracy and results
 
 The accuracy of training is validated with: 
 
@@ -117,11 +117,35 @@ crossval <- predict(model1, valid)
 confusionMatrix(crossval, valid$classe)
 ```
 
-## Results
 
-Applying the model to the real data for testing gave us:
+## Random Forest
+
+For the random forest model:
 
 ```{r}
-pred <- predict(model1, testing1)
-pred
+model2 <- randomForest(classe ~. , data=train)
+pred <- predict(model2, valid, type = "class")
+confusionMatrix(pred, valid$classe)
+```
+
+## Apendix.- Generating files for submission
+
+Using the testing data provided:
+
+```{r}
+pred <- predict(model1, testing, type = "raw")
+```
+
+and, as provided, files to submit were generated with:
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(pred)
 ```
