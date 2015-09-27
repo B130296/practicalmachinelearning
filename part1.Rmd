@@ -1,0 +1,127 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Eduardo Rene Rodriguez Avila"
+date: "September 2015"
+---
+
+##### Johns Hopkins University
+##### Practical Machine Learning course 
+##### Part of the Data Science Specialisation at Coursera
+
+## Summary
+
+Current technology allow us to take measurements about ourselves regularly to know and quantify many activities. Data can be directly used to know how those tasks have been done and to look for some other ways to improve how perform them but it can be used too to discover new data and knowledge to devise new ways of improve or extend their results. The goal of the assignment was to predict the manner in which data was obtained. This report summarises how such kind of data was cleaned and how the variables involved were narrowed down in order to be used with several machine learning algorithms.  Results and comments are exposed.
+
+## Background and Overview
+
+The "quantified self movement" is a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or just because they are tech geeks. One thing  they do regularly is to quantify a particular activity with devices such as *Jawbone Up*, *Nike FuelBand*, and *Fitbit* (but they rarely quantify how well they do it). With this technology it is now possible to collect a large amount of data about personal activity in a relatively inexpensively way.
+
+In this excercise, our goal was to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants wearing such devices. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). Several machine learning algorithms were applied using these data to predict the manner in which they did the excercise (identified with the "classe" variable in the training dataset).
+
+## Procedure
+
+### Libraries and packages
+
+Packages and libraries used were:
+
+```{r message=TRUE}
+library(caret);
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+```
+
+### Getting and loading data 
+
+The training and test data were obtained from "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv" and "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv". Datafiles were downloaded and locally used as CSV files.
+
+```{r echo=FALSE}
+PATH="~/Documents/Personal/Education/Coursera/DSS/C8-PML/Project"
+training_FileName="training.csv"
+testing_FileName="testing.csv"
+
+if( !file.exists(training_FileName) ){
+    training_URL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+    download.file(training_URL,destfile =training_FileName, method = "curl")
+}
+
+if( !file.exists(testing_FileName) ){
+    testing_URL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+    download.file(testing_URL, destfile = testing_FileName, method = "curl")
+}
+
+training <- read.csv(training_FileName, na.string = c("NA","#DIV/0!",""))
+testing <- read.csv(testing_FileName, na.string = c("NA","#DIV/0!",""))
+```
+
+### Cleaning the data 
+
+An initial exploratory analysis on the training data was the first step to understand file structure and data contained. It has `r nrow(training)` observations for `r ncol(training)` variables, distributed as follows:
+
+```{r}
+summary(training$classe)
+```
+
+```{r echo=FALSE}
+NAindex <- apply(training,2,function(x) {sum(is.na(x))}) 
+training <- training[,which(NAindex == 0)]
+NAindex <- apply(testing,2,function(x) {sum(is.na(x))}) 
+testing <- testing[,which(NAindex == 0)]
+v <- which(lapply(training, class) %in% "numeric")
+preObj <-preProcess(training[,v],method=c('knnImpute', 'center', 'scale'))
+training1 <- predict(preObj, training[,v])
+training1$classe <- training$classe
+testing1 <-predict(preObj,testing[,v])
+#Removing variables with near zero variability
+nzv <- nearZeroVar(training1,saveMetrics=TRUE)
+training1 <- training1[,nzv$nzv==FALSE]
+nzv <- nearZeroVar(testing1,saveMetrics=TRUE)
+testing1 <- testing1[,nzv$nzv==FALSE]
+```
+Exploring the file shown there are several columns with NA values, empty or useless for the prediction task (as the non-accelerometer measures). Removing all these columns, as well as those columns with a near zero variance, reduced the number of possible predictors to `r ncol(testing1)`.
+
+### Training
+
+In order to train the model and to do a cross validation, the training set was divided in two partitions.
+
+```{r}
+set.seed(666)
+partition = createDataPartition(training1$classe, p = 3/4, list=FALSE)
+train = training1[partition,]
+valid = training1[-partition,]
+```
+
+and a train model using random forests is formulated:
+
+```{r}
+model1 <- train(classe ~., method="rf", data=train, trControl=trainControl(method='cv'), number=5, allowParallel=TRUE )
+decTrees <- rpart(classe ~ ., data=train, method="class")
+fancyRpartPlot(decTrees)
+```
+
+### Accuracy
+
+The accuracy of training is validated with: 
+
+```{r}
+pred <- predict(model1, train)
+confusionMatrix(pred, train$classe)
+```
+
+and with the cross validation set:
+
+```{r}
+crossval <- predict(model1, valid)
+confusionMatrix(crossval, valid$classe)
+```
+
+## Results
+
+Applying the model to the real data for testing gave us:
+
+```{r}
+pred <- predict(model1, testing1)
+pred
+```
